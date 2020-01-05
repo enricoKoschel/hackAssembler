@@ -12,28 +12,106 @@ enum class command {
 	A_COMMAND,
 	C_COMMAND,
 	L_COMMAND,
+	NO_COMMAND,
 };
 
 class parserModule {
 private:
 	ifstream inputFile;
 	string symbol;
-	bool hasMoreCommands = false;
+	bool hasMoreCommands = true;
 	command commandType;
 	string dest;
 	string comp;
 	string jump;
+	string line;
+	int currentLine;
+
+	void checkSpaces(int i) {
+		if (i != 0) {
+			for (int j = i - 1; j >= 0; j--) {
+				if (line[j] != ' ') {
+					cerr << "Error on line " << currentLine << " at " << line[i] << endl;
+					exit(1);
+				}
+			}
+		}
+	}
 public:	
 	parserModule(string inputFileName) {
 		inputFile = ifstream(inputFileName);
+		if (!inputFile.is_open()) {
+			cerr << inputFileName << " could not be opened!";
+			exit(1);
+		}
 	}
 
 	void advance() {
 		if (!hasMoreCommands) return;
+		if (getline(inputFile, line)) {
+			currentLine++;
+			for (int i = 0; i < line.length(); i++) {
+				switch (line[i]) {
+				case '/':
+					if (line[i + 1] == '/') {
+						advance();
+					}
+					else {
+						cerr << "Error on line " << currentLine << " at " << line[i] << endl;
+					}
+					return;
+				case ' ':
+					break;
+				case '@':
+					checkSpaces(i);
+					if (!isalnum(line[i + 1])) {
+						cerr << "Error on line " << currentLine << " at " << line[i] << endl;
+						exit(1);
+					}
+					//A_COMMAND found
+					commandType = command::A_COMMAND;
+					return;
+				case '(':
+					checkSpaces(i);
+					//L_COMMAND found
+					commandType = command::L_COMMAND;
+					return;
+				case ';':
+					jump = line.substr(i);
+					if (jump.length() != 3) {
+						cerr << "Error on line " << currentLine << " at " << line[i] << endl;
+						exit(1);
+					}
+					cout << jump << endl;
+					return;
+				case '\n':
+					commandType = command::NO_COMMAND;
+					return;
+				default:
+					break;
+				}
+			}
+			if (line == "") {
+				advance();
+			}
+		}
+		else {
+			hasMoreCommands = false;
+		}
+		//debug line
+		cout << "valid command: " << line << endl;
+		return;
 	}
 
 	string getSymbol() {
 		if (commandType == command::C_COMMAND) return "";
+
+		if (commandType == command::A_COMMAND) {
+			return line.substr(line.find('@') + 1);
+		}
+		else if (commandType == command::L_COMMAND) {
+			return line.substr(line.find('(') + 1, line.find(')') - 1);
+		}
 	}
 
 	command getCommandType() {
@@ -55,10 +133,6 @@ public:
 	string getJump() {
 		if (commandType != command::C_COMMAND) return "";
 	}
-
-	bool isFileOpen() {
-		return inputFile.is_open();
-	}
 };
 
 class codeModule {
@@ -68,6 +142,10 @@ public:
 
 	codeModule(string outputFileName) {
 		outputFile = ofstream(outputFileName, ios::trunc);
+		if (!outputFile.is_open()) {
+			cerr << outputFileName << " could not be created/opened!";
+			exit(1);
+		}
 	}
 
 	string assembleDest(string mnemonic) {
@@ -80,10 +158,6 @@ public:
 
 	string assembleJump(string mnemonic) {
 
-	}
-
-	bool isFileOpen() {
-		return outputFile.is_open();
 	}
 };
 
@@ -141,14 +215,12 @@ int main(int argc, char* argv[]) {
 	
 	parserModule parser = parserModule(inputFileName);
 	codeModule code = codeModule(outputFileName);
-
-	if (!parser.isFileOpen()) {
-		cerr << inputFileName << " could not be opened!";
-		return 1;
-	}
-	if (!code.isFileOpen()) {
-		cerr << outputFileName << " could not be created/opened!";
-		return 1;
+	symbolTable symbols = symbolTable();
+	
+	//------------------------
+	while(parser.getHasMoreCommands()) {
+		parser.advance();
+		cout << parser.getSymbol() << endl;
 	}
 
 	return 0;
