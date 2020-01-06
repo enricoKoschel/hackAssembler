@@ -2,11 +2,14 @@
 #include <fstream>
 #include <string>
 #include <unordered_map>
+#include <algorithm>
 
 using namespace std;
 
 string inputFileName;
 string outputFileName;
+string validComps[28] = {"0", "1", "-1", "D", "A", "!D", "!A", "-D", "-A", "D+1", "A+1", "D-1", "A-1", 
+"D+A", "D-A", "A-D", "D&A", "D|A", "M", "!M", "-M", "M+1", "M-1", "D+M", "D-M", "M-D", "D&M", "D|M", };
 
 enum class command {
 	A_COMMAND,
@@ -20,23 +23,12 @@ private:
 	ifstream inputFile;
 	string symbol;
 	bool hasMoreCommands = true;
-	command commandType;
+	command commandType = command::NO_COMMAND;
 	string dest;
 	string comp;
 	string jump;
 	string line;
 	int currentLine;
-
-	void checkSpaces(int i) {
-		if (i != 0) {
-			for (int j = i - 1; j >= 0; j--) {
-				if (line[j] != ' ') {
-					cerr << "Error on line " << currentLine << " at " << line[i] << endl;
-					exit(1);
-				}
-			}
-		}
-	}
 public:	
 	parserModule(string inputFileName) {
 		inputFile = ifstream(inputFileName);
@@ -50,61 +42,118 @@ public:
 		if (!hasMoreCommands) return;
 		if (getline(inputFile, line)) {
 			currentLine++;
-			for (int i = 0; i < line.length(); i++) {
-				switch (line[i]) {
-				case '/':
-					if (line[i + 1] == '/') {
-						advance();
+			line.erase(remove_if(line.begin(), line.end(), ::isspace), line.end());
+
+			//End of line comment check here
+
+			if (line[0] == '/' && line[1] == '/') {
+				//Comment found
+				advance();
+			}
+			else if (line == "") {
+				//Empty line found
+				advance();
+			}
+			else if (line[0] == '@') {
+				//A_COMMAND found
+				commandType = command::A_COMMAND;
+			}
+			else if (line[0] == '(' && line[line.length() - 1] == ')') {
+				//L_COMMAND found
+				commandType = command::L_COMMAND;
+			}
+			else if (line[0] == 'M' || line[0] == 'D' || line[0] == 'A' || line[0] == '0') {
+				//Potential C_COMMAND found
+				commandType = command::C_COMMAND;
+				if (line.find_first_of('=') != string::npos) {
+					string tempDest = line.substr(0, line.find_first_of('='));
+					if (tempDest == "M" || tempDest == "D" || tempDest == "MD" || tempDest == "A" 
+						|| tempDest == "AM" || tempDest == "AD" || tempDest == "AMD") {
+						//valid dest
+						dest = tempDest;
+					}
+					string tempComp = line.substr(line.find_first_of('=') + 1);
+					//check comp
+					for (int i = 0; i < 28; i++) {
+						if (tempComp == validComps[i]) {
+							comp = tempComp;
+						}
+					}
+
+					if (comp != tempComp) {
+						//invalid comp
+						cerr << "Error on line " << currentLine << endl;
+						exit(1);
+					}
+
+					//check potential jump
+					if (line.find_first_of(';') != string::npos) {
+						string tempJump = line.substr(line.find_first_of(';') + 1);
+						if (tempJump == "JGT" || tempJump == "JEQ" || tempJump == "JGE" || tempJump == "JLT"
+							|| tempJump == "JNE" || tempJump == "JLE" || tempJump == "JMP") {
+							//valid jump
+							jump = tempJump;
+						}
+						else {
+							cerr << "Error on line " << currentLine << endl;
+							exit(1);
+						}
 					}
 					else {
-						cerr << "Error on line " << currentLine << " at " << line[i] << endl;
+						jump = "null";
 					}
-					return;
-				case ' ':
-					break;
-				case '@':
-					checkSpaces(i);
-					if (!isalnum(line[i + 1])) {
-						cerr << "Error on line " << currentLine << " at " << line[i] << endl;
+				}
+				else {
+					dest = "null";
+					if (line.find_first_of(';') != string::npos) {
+						string tempComp = line.substr(0, line.find_first_of(';'));
+						//check comp
+						for (int i = 0; i < 28; i++) {
+							if (tempComp == validComps[i]) {
+								comp = tempComp;
+								break;
+							}
+						}
+
+						if (comp != tempComp) {
+							//invalid comp
+							cerr << "Error on line " << currentLine << endl;
+							exit(1);
+						}
+
+						//assign jump
+						string tempJump = line.substr(line.find_first_of(';') + 1);
+						if (tempJump == "JGT" || tempJump == "JEQ" || tempJump == "JGE" || tempJump == "JLT"
+							|| tempJump == "JNE" || tempJump == "JLE" || tempJump == "JMP") {
+							//valid jump
+							jump = tempJump;
+						}
+						else {
+							cerr << "Error on line " << currentLine << endl;
+							exit(1);
+						}
+					}
+					else {
+						//error
+						cerr << "Error on line " << currentLine << endl;
 						exit(1);
 					}
-					//A_COMMAND found
-					commandType = command::A_COMMAND;
-					return;
-				case '(':
-					checkSpaces(i);
-					//L_COMMAND found
-					commandType = command::L_COMMAND;
-					return;
-				case ';':
-					jump = line.substr(i);
-					if (jump.length() != 3) {
-						cerr << "Error on line " << currentLine << " at " << line[i] << endl;
-						exit(1);
-					}
-					cout << jump << endl;
-					return;
-				case '\n':
-					commandType = command::NO_COMMAND;
-					return;
-				default:
-					break;
 				}
 			}
-			if (line == "") {
-				advance();
+			else {
+				commandType = command::NO_COMMAND;
+				cerr << "Error on line " << currentLine << endl;
+				exit(1);
 			}
 		}
 		else {
 			hasMoreCommands = false;
 		}
-		//debug line
-		cout << "valid command: " << line << endl;
 		return;
 	}
 
 	string getSymbol() {
-		if (commandType == command::C_COMMAND) return "";
+		if (commandType == command::C_COMMAND || commandType == command::NO_COMMAND) return "";
 
 		if (commandType == command::A_COMMAND) {
 			return line.substr(line.find('@') + 1);
@@ -124,14 +173,17 @@ public:
 
 	string getDest() {
 		if (commandType != command::C_COMMAND) return "";
+		return dest;
 	}
 
 	string getComp() {
 		if (commandType != command::C_COMMAND) return "";
+		return comp;
 	}
 
 	string getJump() {
 		if (commandType != command::C_COMMAND) return "";
+		return jump;
 	}
 };
 
@@ -219,8 +271,31 @@ int main(int argc, char* argv[]) {
 	
 	//------------------------
 	while(parser.getHasMoreCommands()) {
+		cout << endl << "advance: ";
 		parser.advance();
-		cout << parser.getSymbol() << endl;
+		
+		if (parser.getCommandType() == command::C_COMMAND) {
+			cout << "C_COMMAND" << endl;
+		}
+		else if (parser.getCommandType() == command::A_COMMAND) {
+			cout << "A_COMMAND" << endl;
+		}
+		else if (parser.getCommandType() == command::L_COMMAND) {
+			cout << "L_COMMAND" << endl;
+		}
+		else if (parser.getCommandType() == command::NO_COMMAND) {
+			cout << "NO_COMMAND" << endl;
+		}
+
+		if (parser.getCommandType() == command::C_COMMAND) {
+			cout << "comp: " << parser.getComp() << endl;
+			cout << "dest: " << parser.getDest() << endl;
+			cout << "jump: " << parser.getJump() << endl;
+		}
+		else if(parser.getCommandType() != command::NO_COMMAND) {
+			cout << "symbol: ";
+			cout << parser.getSymbol() << endl;
+		}
 	}
 
 	return 0;
