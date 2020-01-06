@@ -11,11 +11,13 @@ string outputFileName;
 string validComps[28] = {"0", "1", "-1", "D", "A", "!D", "!A", "-D", "-A", "D+1", "A+1", "D-1", "A-1", 
 "D+A", "D-A", "A-D", "D&A", "D|A", "M", "!M", "-M", "M+1", "M-1", "D+M", "D-M", "M-D", "D&M", "D|M", };
 
+string compBin[18] = {"101010", "111111", "111010", "001100", "110000", "001101", "110001", "001111", 
+"110011", "011111", "110111", "001110", "110010", "000010", "010011", "000111", "000000", "010101"};
+
 enum class command {
 	A_COMMAND,
 	C_COMMAND,
 	L_COMMAND,
-	NO_COMMAND,
 };
 
 class parserModule {
@@ -23,7 +25,7 @@ private:
 	ifstream inputFile;
 	string symbol;
 	bool hasMoreCommands = true;
-	command commandType = command::NO_COMMAND;
+	command commandType;
 	string dest;
 	string comp;
 	string jump;
@@ -38,13 +40,18 @@ public:
 		}
 	}
 
+	string getLine() {
+		return line;
+	}
+
 	void advance() {
 		if (!hasMoreCommands) return;
 		if (getline(inputFile, line)) {
 			currentLine++;
 			line.erase(remove_if(line.begin(), line.end(), ::isspace), line.end());
 
-			//End of line comment check here
+			//End of line comment check
+			line = line.substr(0, line.find("//"));
 
 			if (line[0] == '/' && line[1] == '/') {
 				//Comment found
@@ -141,7 +148,6 @@ public:
 				}
 			}
 			else {
-				commandType = command::NO_COMMAND;
 				cerr << "Error on line " << currentLine << endl;
 				exit(1);
 			}
@@ -153,7 +159,7 @@ public:
 	}
 
 	string getSymbol() {
-		if (commandType == command::C_COMMAND || commandType == command::NO_COMMAND) return "";
+		if (commandType == command::C_COMMAND) return "";
 
 		if (commandType == command::A_COMMAND) {
 			return line.substr(line.find('@') + 1);
@@ -185,11 +191,110 @@ public:
 		if (commandType != command::C_COMMAND) return "";
 		return jump;
 	}
+
+	void closeFile() {
+		inputFile.close();
+	}
 };
 
 class codeModule {
 private:
 	ofstream outputFile;
+
+	string assembleDest(string dest) {
+		if (dest == "null") {
+			return "000";
+		}
+		else if (dest == "M") {
+			return "001";
+		}
+		else if (dest == "D") {
+			return "010";
+		}
+		else if (dest == "MD") {
+			return "011";
+		}
+		else if (dest == "A") {
+			return "100";
+		}
+		else if (dest == "AM") {
+			return "101";
+		}
+		else if (dest == "AD") {
+			return "110";
+		}
+		else if (dest == "AMD") {
+			return "111";
+		}
+		else {
+			return "-1";
+		}
+	}
+
+	string assembleComp(string comp) {
+		string temp;
+		
+		temp += (comp.find('M') != string::npos) ? "1" : "0"; //Sets 'a' bit
+
+		//Replace 'M' with 'D' to allow easier access to array of binary values
+		if (comp.find('M') != string::npos) {
+			comp.replace(comp.find('M'), 1, "D");
+		}
+
+		for (int i = 0; i < 28; i++) {
+			if (temp == validComps[i]) {
+				return temp + compBin[i];
+			}
+		}
+	}
+
+	string assembleJump(string jump) {
+		if (jump == "null") {
+			return "000";
+		}
+		else if (jump == "JGT") {
+			return "001";
+		}
+		else if (jump == "JEQ") {
+			return "010";
+		}
+		else if (jump == "JGE") {
+			return "011";
+		}
+		else if (jump == "JLT") {
+			return "100";
+		}
+		else if (jump == "JNE") {
+			return "101";
+		}
+		else if (jump == "JLE") {
+			return "110";
+		}
+		else if (jump == "JMP") {
+			return "111";
+		}
+		else {
+			return "-1";
+		}
+	}
+
+	string toBin(string constant) {
+		int number = stoi(constant);
+		int binNumber[15] = {};
+		int i = 0;
+		string output;
+
+		do {
+			binNumber[i] = number % 2;
+			number /= 2;
+			i++;
+		} while (number > 0);
+
+		for (i = 14; i >= 0; i--) {
+			output += to_string(binNumber[i]);
+		}
+		return output;
+	}
 public:
 
 	codeModule(string outputFileName) {
@@ -200,16 +305,20 @@ public:
 		}
 	}
 
-	string assembleDest(string mnemonic) {
-
+	void assemble(string dest, string comp, string jump) {
+		string output = "111"; //3 constant bits for c instruction
+		output += assembleComp(comp); //returns 7 bits
+		output += assembleDest(dest); //returns 3 bits
+		output += assembleJump(jump); //returns 3 bits
+		outputFile << output << endl; //output now 16 bits
 	}
 
-	string assembleComp(string mnemonic) {
-
+	void writeConstant(string constant) {
+		outputFile << "0" + toBin(constant) << endl;
 	}
 
-	string assembleJump(string mnemonic) {
-
+	void closeFile() {
+		outputFile.close();
 	}
 };
 
@@ -271,32 +380,25 @@ int main(int argc, char* argv[]) {
 	
 	//------------------------
 	while(parser.getHasMoreCommands()) {
-		cout << endl << "advance: ";
+		//Parse and assemble input file
 		parser.advance();
-		
+		if (!parser.getHasMoreCommands()) break;
 		if (parser.getCommandType() == command::C_COMMAND) {
-			cout << "C_COMMAND" << endl;
+			//assembles parsed command into outputFIle
+			code.assemble(parser.getDest(), parser.getComp(), parser.getJump());
 		}
 		else if (parser.getCommandType() == command::A_COMMAND) {
-			cout << "A_COMMAND" << endl;
+			//extract label from symbolTable
+			//write constant/address to outputFile
+			code.writeConstant(parser.getSymbol());
 		}
 		else if (parser.getCommandType() == command::L_COMMAND) {
-			cout << "L_COMMAND" << endl;
-		}
-		else if (parser.getCommandType() == command::NO_COMMAND) {
-			cout << "NO_COMMAND" << endl;
-		}
-
-		if (parser.getCommandType() == command::C_COMMAND) {
-			cout << "comp: " << parser.getComp() << endl;
-			cout << "dest: " << parser.getDest() << endl;
-			cout << "jump: " << parser.getJump() << endl;
-		}
-		else if(parser.getCommandType() != command::NO_COMMAND) {
-			cout << "symbol: ";
-			cout << parser.getSymbol() << endl;
+			//add label to symbolTable
 		}
 	}
+
+	parser.closeFile();
+	code.closeFile();
 
 	return 0;
 }
