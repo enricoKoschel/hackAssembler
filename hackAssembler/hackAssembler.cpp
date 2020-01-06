@@ -437,9 +437,21 @@ int main(int argc, char* argv[]) {
 			//add label to symbolTable
 			string symbol = parser.getSymbol();
 
-			do {
+			while (true) {
 				parser.advance();
-			} while (parser.getCommandType() == command::L_COMMAND);
+				if (parser.getCommandType() == command::L_COMMAND) {
+					symbol += "\n";
+					symbol += parser.getSymbol();
+				}
+				else {
+					break;
+				}
+			}
+
+			while (symbol.find("\n") != string::npos) {
+				symbols.addEntry(symbol.substr(0, symbol.find("\n")), parser.getCurrentInstruction());
+				symbol = symbol.substr(symbol.find("\n") + 1);
+			}
 			symbols.addEntry(symbol, parser.getCurrentInstruction());
 		}
 	}
@@ -461,7 +473,7 @@ int main(int argc, char* argv[]) {
 			//write constant/address to outputFile
 			string symbol = parser.getSymbol();
 			bool label = false;
-
+			
 			for (int i = 0; i < symbol.length(); i++) {
 				if (!isdigit(symbol[i])) {
 					code.writeConstant(symbols.getAddress(symbol));
