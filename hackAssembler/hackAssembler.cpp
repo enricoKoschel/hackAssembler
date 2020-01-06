@@ -31,6 +31,7 @@ private:
 	string jump;
 	string line;
 	int currentLine;
+	int currentInstruction;
 public:	
 	parserModule(string inputFileName) {
 		inputFile = ifstream(inputFileName);
@@ -42,6 +43,17 @@ public:
 
 	string getLine() {
 		return line;
+	}
+
+	int getCurrentInstruction() {
+		return currentInstruction;
+	}
+
+	void resetFile() {
+		inputFile.clear();
+		inputFile.seekg(0, ios::beg);
+
+		hasMoreCommands = true;
 	}
 
 	void advance() {
@@ -64,6 +76,7 @@ public:
 			else if (line[0] == '@') {
 				//A_COMMAND found
 				commandType = command::A_COMMAND;
+				currentInstruction++;
 			}
 			else if (line[0] == '(' && line[line.length() - 1] == ')') {
 				//L_COMMAND found
@@ -72,6 +85,8 @@ public:
 			else if (line[0] == 'M' || line[0] == 'D' || line[0] == 'A' || line[0] == '0') {
 				//Potential C_COMMAND found
 				commandType = command::C_COMMAND;
+				currentInstruction++;
+
 				if (line.find_first_of('=') != string::npos) {
 					string tempDest = line.substr(0, line.find_first_of('='));
 					if (tempDest == "M" || tempDest == "D" || tempDest == "MD" || tempDest == "A" 
@@ -278,8 +293,26 @@ private:
 		}
 	}
 
-	string toBin(string constant) {
+	string strToBin(string constant) {
 		int number = stoi(constant);
+		int binNumber[15] = {};
+		int i = 0;
+		string output;
+
+		do {
+			binNumber[i] = number % 2;
+			number /= 2;
+			i++;
+		} while (number > 0);
+
+		for (i = 14; i >= 0; i--) {
+			output += to_string(binNumber[i]);
+		}
+		return output;
+	}
+
+	string intToBin(int constant) {
+		int number = constant;
 		int binNumber[15] = {};
 		int i = 0;
 		string output;
@@ -314,7 +347,11 @@ public:
 	}
 
 	void writeConstant(string constant) {
-		outputFile << "0" + toBin(constant) << endl;
+		outputFile << "0" + strToBin(constant) << endl;
+	}
+
+	void writeConstant(int constant) {
+		outputFile << "0" + intToBin(constant) << endl;
 	}
 
 	void closeFile() {
@@ -330,10 +367,22 @@ private:
 		return table.find(symbol) != table.end();
 	}
 public:
-	symbolTable() {}
+	symbolTable() {
+		for (int i = 0; i <= 15; i++) {
+			table.insert({ "R" + to_string(i), i });
+		}
+		
+		table.insert({ "SP", 0 });
+		table.insert({ "LCL", 1 });
+		table.insert({ "ARG", 2 });
+		table.insert({ "THIS", 3 });
+		table.insert({ "THAT", 4 });
+		table.insert({ "SCREEN", 16384 });
+		table.insert({ "KBD", 24576 });
+	}
 
 	void addEntry(string symbol, int address) {
-		table.insert({symbol, address});
+		table.insert({ symbol, address });
 	}
 
 	int getAddress(string symbol) {
@@ -379,10 +428,30 @@ int main(int argc, char* argv[]) {
 	symbolTable symbols = symbolTable();
 	
 	//------------------------
+	//First pass
+	while (parser.getHasMoreCommands()) {
+		parser.advance();
+		if (!parser.getHasMoreCommands()) break;
+
+		if (parser.getCommandType() == command::L_COMMAND) {
+			//add label to symbolTable
+			string symbol = parser.getSymbol();
+
+			do {
+				parser.advance();
+			} while (parser.getCommandType() == command::L_COMMAND);
+			symbols.addEntry(symbol, parser.getCurrentInstruction());
+		}
+	}
+
+	parser.resetFile();
+
+	//Second pass
 	while(parser.getHasMoreCommands()) {
 		//Parse and assemble input file
 		parser.advance();
 		if (!parser.getHasMoreCommands()) break;
+
 		if (parser.getCommandType() == command::C_COMMAND) {
 			//assembles parsed command into outputFIle
 			code.assemble(parser.getDest(), parser.getComp(), parser.getJump());
@@ -390,10 +459,20 @@ int main(int argc, char* argv[]) {
 		else if (parser.getCommandType() == command::A_COMMAND) {
 			//extract label from symbolTable
 			//write constant/address to outputFile
-			code.writeConstant(parser.getSymbol());
+			string symbol = parser.getSymbol();
+			bool label = false;
+
+			for (int i = 0; i < symbol.length(); i++) {
+				if (!isdigit(symbol[i])) {
+					code.writeConstant(symbols.getAddress(symbol));
+					label = true;
+					break;
+				}
+			}
+			if (!label) code.writeConstant(symbol);
 		}
 		else if (parser.getCommandType() == command::L_COMMAND) {
-			//add label to symbolTable
+			//ignore on second pass
 		}
 	}
 
