@@ -238,11 +238,11 @@ private:
 
 		//Replace 'M' with 'D' to allow easier access to array of binary values
 		if (comp.find('M') != string::npos) {
-			comp.replace(comp.find('M'), 1, "D");
+			comp.replace(comp.find('M'), 1, "A");
 		}
 
 		for (int i = 0; i < 28; i++) {
-			if (temp == validComps[i]) {
+			if (comp == validComps[i]) {
 				return temp + compBin[i];
 			}
 		}
