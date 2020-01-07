@@ -31,7 +31,8 @@ private:
 	string jump;
 	string line;
 	int currentLine;
-	int currentInstruction;
+	int currentInstruction = -1;
+	int currentVariable = 16;
 public:	
 	parserModule(string inputFileName) {
 		inputFile = ifstream(inputFileName);
@@ -47,6 +48,10 @@ public:
 
 	int getCurrentInstruction() {
 		return currentInstruction;
+	}
+
+	int getCurrentVariableAndInc() {
+		return currentVariable++;
 	}
 
 	void resetFile() {
@@ -473,10 +478,16 @@ int main(int argc, char* argv[]) {
 			//write constant/address to outputFile
 			string symbol = parser.getSymbol();
 			bool label = false;
-			
+
 			for (int i = 0; i < symbol.length(); i++) {
 				if (!isdigit(symbol[i])) {
+					if (symbols.getAddress(symbol) == -1) {
+						//Variable
+						symbols.addEntry(symbol, parser.getCurrentVariableAndInc());
+
+					}
 					code.writeConstant(symbols.getAddress(symbol));
+
 					label = true;
 					break;
 				}
