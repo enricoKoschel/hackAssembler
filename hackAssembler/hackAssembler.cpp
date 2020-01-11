@@ -494,9 +494,6 @@ int main(int argc, char* argv[]) {
 			}
 			if (!label) code.writeConstant(symbol);
 		}
-		else if (parser.getCommandType() == command::L_COMMAND) {
-			//ignore on second pass
-		}
 	}
 
 	parser.closeFile();
