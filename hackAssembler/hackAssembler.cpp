@@ -401,16 +401,11 @@ public:
 };
 
 int handleArguments(int argc, char* argv[]) {
-	if (argc == 3) {
-		if (strcmp(argv[1], "-i") == 0) {
-			inputFileName = argv[2];
-			int pos = inputFileName.find(".asm", 1);
-			if (pos != string::npos) {
-				outputFileName = inputFileName.substr(0, pos) + ".hack";
-			}
-			else {
-				return 1;
-			}
+	if (argc == 2) {
+		inputFileName = argv[1];
+		int pos = inputFileName.find(".asm", 1);
+		if (pos != string::npos) {
+			outputFileName = inputFileName.substr(0, pos) + ".hack";
 		}
 		else {
 			return 1;
@@ -424,7 +419,7 @@ int handleArguments(int argc, char* argv[]) {
 
 int main(int argc, char* argv[]) {
 	if (handleArguments(argc, argv) == 1) {
-		cerr << "Usage: hackAssembler.exe -i [inputFileName.asm]\noutput filename is inputFileName.hack";
+		cerr << "Usage: hackAssembler.exe [inputFileName.asm]\noutput filename is inputFileName.hack";
 		return 1;
 	}
 	
